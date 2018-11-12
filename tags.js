@@ -35,10 +35,10 @@ getLocations();
 function getLocations(callback) {
   var questions = [
     {
-      name: "locs",
+      name: "tags",
       type: "input",
-      default: "485819985122652",
-      message: "Enter locations seperated by commas",
+      default: "photo",
+      message: "Enter tags seperated by commas",
       validate: function(value) {
         if (value.length) {
           return true;
@@ -53,20 +53,26 @@ function getLocations(callback) {
 }
 
 function getDir(answers) {
-  let arr = answers.locs.split(",");
-  responses.locs = [];
+  let arr = answers.tags.split(",");
+  responses.tags = [];
 
-  arr.forEach((loc, index) => {
-    loc = loc.trim();
-    if (loc.length != "") responses.locs.push(loc);
+  arr.forEach((tag, index) => {
+    tag = tag.trim();
+    if (tag.length != "") responses.tags.push(tag);
   });
 
-  let manyLocs = responses.locs.length !== 1;
-  let defaultLoc = !manyLocs
-    ? "./" + responses.locs[0].replace(/ /g, "") + "/"
+  let manyTags = responses.tags.length !== 1;
+  let defaultTag = !manyTags
+    ? "./" + responses.tags[0].replace(/ /g, "") + "/"
     : "./images/";
 
   var questions = [
+    {
+      name: "itemType",
+      message: "What type of tag?",
+      type: "list",
+      choices: ["Location", "Hashtag"]
+    },
     {
       name: "maxImages",
       type: "input",
@@ -81,7 +87,7 @@ function getDir(answers) {
       name: "location",
       type: "input",
       message: "Enter location to save",
-      default: defaultLoc, // './' + responses.locs[0] + '/',
+      default: defaultTag, // './' + responses.tags[0] + '/',
       validate: function(value) {
         if (value.length) {
           return true;
@@ -94,7 +100,7 @@ function getDir(answers) {
       message: "Create folders for each Location?",
       type: "confirm",
       name: "useFolders",
-      default: manyLocs
+      default: manyTags
     },
     {
       name: "waitInterval",
@@ -120,48 +126,61 @@ function getDir(answers) {
     if (responses.maxImages == 0) responses.maxImages = 100000;
     if (responses.waitInterval < 300) responses.waitInterval = 300;
 
-    responses.length = responses.maxImages * responses.locs.length;
+    responses.length = responses.maxImages * responses.tags.length;
     initDownload();
   });
 }
 
 function initDownload() {
-  let locs = [];
-  responses.locs.forEach(name => {
-    let loc = {};
-    loc.name = name.replace(/^\s+|\s+$/g, "");
-    loc.page =
-      "https://www.instagram.com/explore/locations/" +
-      loc.name.replace(/ /g, "%20");
-    loc.location = responses.location;
-    if (responses.useFolders && responses.locs.length > 1)
-      loc.location += "/" + loc.name.replace(/ /g, "") + "/";
-    if (loc.name !== "") locs.push(loc);
-    fs.ensureDirSync(loc.location);
-    if (!fs.existsSync(loc.location)) {
-      fs.mkdirSync(loc.location);
+  let tags = [];
+  responses.tags.forEach(name => {
+    let tag = {};
+    tag.name = name.replace(/^\s+|\s+$/g, "");
+
+    let pageBase = "";
+
+    switch (responses.itemType) {
+      case "Location":
+        pageBase = "https://www.instagram.com/explore/locations/";
+        break;
+      case "Hashtag":
+        pageBase = "https://www.instagram.com/explore/tags/";
+        break;
+      case "Username":
+        pageBase = "https://www.instagram.com/";
+        break;
+    }
+
+    tag.page = pageBase + tag.name;
+    tag.location = responses.location;
+    if (responses.useFolders && responses.tags.length > 1)
+      tag.location += "/" + tag.name.replace(/ /g, "") + "/";
+    if (tag.name !== "") tags.push(tag);
+    fs.ensureDirSync(tag.location);
+    if (!fs.existsSync(tag.location)) {
+      fs.mkdirSync(tag.location);
     }
   });
 
-  status.locs = ora({
+  status.tags = ora({
     text: "Scraping Location Info",
     spinner: "dots2"
   }).start();
 
   var browseObj, broswer, page;
 
-  asyncForEach(locs, async (loc, index) => {
+  asyncForEach(tags, async (tag, index) => {
     if (!browseObj) {
       browseObj = await startBrowser();
       browser = browseObj.browser;
       page = browseObj.page;
     }
-    let images = await getImages(loc, page);
+    let images = await getImages(tag, page);
 
-    let outputDirectory = "./jsons/" + loc.name + "_media.json";
+    let outputDirectory = "./jsons/" + tag.name + "_media.json";
     writeFile(outputDirectory, images);
 
-    if (index == locs.length - 1) browser.close();
+    if (index == tags.length - 1) browser.close();
   });
 }
 
@@ -187,17 +206,17 @@ async function startBrowser() {
     windowId
   });
 
-  if (responses.itemType == "Board") {
-    await logIn(page);
-  }
+  // if (responses.itemType == "Board") {
+  //   await logIn(page);
+  // }
 
   return { browser, page };
 }
 
-async function getImages(loc, page) {
-  let locUrl = encodeURIComponent(loc.name);
+async function getImages(tag, page) {
+  let tagUrl = encodeURIComponent(tag.name);
 
-  await page.goto(loc.page);
+  await page.goto(tag.page);
   await page.waitFor(2000);
 
   const bodyHandle = await page.$("body");
@@ -242,7 +261,7 @@ async function getImages(loc, page) {
       counter++;
       continue;
     }
-    processImage(image, loc);
+    processImage(image, tag);
     images.push(image);
   }
   return images;
@@ -268,21 +287,21 @@ async function logIn(page) {
   await page.waitForNavigation();
 }
 
-function processImage(image, loc) {
+function processImage(image, tag) {
   if (itemsBeingProcessed > maxItems) {
     fileQueue.push(image);
     return;
   }
 
   itemsBeingProcessed += 1;
-  saveImage(image, loc);
+  saveImage(image, tag);
 }
 
-function saveImage(image, loc) {
+function saveImage(image, tag) {
   let link = image.imgSrc;
   let index = image.index;
   let name = index + "-" + image.id;
-  let folder = loc.location || "./";
+  let folder = tag.location || "./";
 
   // name = name.replace(/[`~!@#$%^&*()_|+\-=?;:'",.<>\{\}\[\]\\\/]/gi, '').trim()
   // if (name.length > 20) name = name.slice(0,40).replace(/\s/g,'')
@@ -297,11 +316,11 @@ function saveImage(image, loc) {
       .pipe(stream);
   } else {
     counter++;
-    finishImage(loc);
+    finishImage(tag);
   }
   stream.on("finish", () => {
     counter++;
-    finishImage(loc);
+    finishImage(tag);
     if (counter == responses.length) {
       status.downloading.succeed();
       ora("Complete").succeed();
@@ -314,17 +333,17 @@ function saveImage(image, loc) {
   });
 }
 
-function finishImage(loc) {
+function finishImage(tag) {
   itemsBeingProcessed -= 1;
   if (!status.downloading) {
-    status.locs.succeed();
+    status.tags.succeed();
     status.downloading = ora("Downloading Images...").start();
   }
   status.downloading.text = `Processed ${counter} of ${
     responses.length
-  } total | loc: ${loc.name}`; // process.stdout.write(`\rprocessed ${counter} of ${responses.length} total / working on ... ${topic.name} `)
+  } total | tag: ${tag.name}`; // process.stdout.write(`\rprocessed ${counter} of ${responses.length} total / working on ... ${topic.name} `)
   if (itemsBeingProcessed <= maxItems && fileQueue.length > 0) {
-    processImage(fileQueue.shift(), loc);
+    processImage(fileQueue.shift(), tag);
   }
 }
 
@@ -357,9 +376,24 @@ function getImageSel(num) {
   if (row > 9) {
     row = 9 + ((row - 1) % 3);
   }
-  // console.log(num, row,col)
+
+  let tagModifier;
+  switch (responses.itemType) {
+    case "Location":
+      tagModifier = 4;
+      break;
+    case "Hashtag":
+      tagModifier = 3;
+      break;
+    case "Username":
+      tagModifier = 4; // to be figured out
+      break;
+  }
+
   return (
-    "#react-root > section > main > article > div:nth-child(4) > div > div:nth-child(" +
+    "#react-root > section > main > article > div:nth-child(" +
+    tagModifier +
+    ") > div > div:nth-child(" +
     row +
     ") > div:nth-child(" +
     col +
