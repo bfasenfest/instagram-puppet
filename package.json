@@ -1,0 +1,26 @@
+{
+  "name": "instagram-puppet",
+  "version": "1.0.1",
+  "description": "Scrapes images from pinterest",
+  "main": "pinterest.js",
+  "dependencies": {
+    "chalk": "^2.3.0",
+    "clear": "0.0.1",
+    "figlet": "^1.2.0",
+    "fs-extra": "^5.0.0",
+    "inquirer": "^5.0.1",
+    "ora": "^1.3.0",
+    "performance-now": "^2.1.0",
+    "puppeteer": "^1.0.0",
+    "request": "^2.83.0"
+  },
+  "bin": {
+    "pinterest": "./pinterest.js"
+  },
+  "scripts": {
+    "pinterest": "./pinterest.js"
+  },
+  "devDependencies": {},
+  "author": "B",
+  "license": "ISC"
+}
